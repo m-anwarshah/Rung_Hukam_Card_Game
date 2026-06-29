@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Rung" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@color/felt_dark</item>
+        <item name="android:navigationBarColor">@color/felt_dark</item>
+        <item name="android:windowBackground">@color/felt_dark</item>
+    </style>
+</resources>

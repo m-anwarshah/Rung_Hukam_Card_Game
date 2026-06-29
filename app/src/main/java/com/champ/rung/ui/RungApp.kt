@@ -1,0 +1,249 @@
+package com.champ.rung.ui
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.champ.rung.GameViewModel
+import com.champ.rung.Screen
+import com.champ.rung.ui.theme.Cream
+import com.champ.rung.ui.theme.DangerRed
+import com.champ.rung.ui.theme.DisplayFont
+import com.champ.rung.ui.theme.Felt
+import com.champ.rung.ui.theme.FeltDark
+import com.champ.rung.ui.theme.Gold
+
+@Composable
+fun RungApp(vm: GameViewModel) {
+    val ui by vm.ui.collectAsState()
+    val snackbar = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        vm.toasts.collect { snackbar.showSnackbar(it) }
+    }
+
+    Scaffold(
+        containerColor = FeltDark,
+        snackbarHost = { SnackbarHost(snackbar) }
+    ) { padding ->
+        Box(Modifier.padding(padding).fillMaxSize()) {
+            when (ui.screen) {
+                Screen.HOME -> HomeScreen(
+                    name = ui.myName,
+                    onName = vm::setName,
+                    onCreate = vm::createRoom,
+                    onJoin = vm::openJoin
+                )
+                Screen.JOIN -> JoinScreen(vm)
+                Screen.ROOM -> RoomScreen(vm)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeScreen(
+    name: String,
+    onName: (String) -> Unit,
+    onCreate: () -> Unit,
+    onJoin: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(Modifier.height(48.dp))
+        Text("\u2660", fontSize = 64.sp, color = Gold)
+        Text(
+            "RUNG",
+            fontSize = 52.sp,
+            fontWeight = FontWeight.Bold,
+            color = Cream,
+            letterSpacing = 8.sp,
+            fontFamily = DisplayFont
+        )
+        Text("Court Piece \u00B7 Hukam", color = Gold, fontSize = 15.sp, letterSpacing = 2.sp)
+        Spacer(Modifier.height(40.dp))
+
+        OutlinedTextField(
+            value = name,
+            onValueChange = onName,
+            label = { Text("Your name") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(24.dp))
+        Button(
+            onClick = onCreate,
+            modifier = Modifier.fillMaxWidth().height(54.dp)
+        ) {
+            Text("Create room", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = onJoin,
+            modifier = Modifier.fillMaxWidth().height(54.dp)
+        ) {
+            Text("Join room", fontSize = 17.sp)
+        }
+        Spacer(Modifier.weight(1f))
+        Text(
+            "One phone creates the room and hosts. Three others join over the same " +
+                "Wi-Fi or hotspot using the 4-digit code. Four players, two teams, " +
+                "played anti-clockwise.",
+            color = Cream.copy(alpha = 0.6f),
+            fontSize = 13.sp,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun JoinScreen(vm: GameViewModel) {
+    val ui by vm.ui.collectAsState()
+    BackHandler { vm.closeJoin() }
+
+    var code by rememberSaveable { mutableStateOf("") }
+    var ip by rememberSaveable { mutableStateOf("") }
+    val scroll = rememberScrollState()
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(scroll)
+    ) {
+        Text(
+            "Join a room",
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Bold,
+            color = Cream,
+            fontFamily = DisplayFont
+        )
+        Spacer(Modifier.height(20.dp))
+
+        OutlinedTextField(
+            value = code,
+            onValueChange = { if (it.length <= 4 && it.all { c -> c.isDigit() }) code = it },
+            label = { Text("Room code") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(Modifier.height(20.dp))
+        Text("Rooms nearby", color = Gold, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+
+        if (ui.discovered.isEmpty()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(16.dp),
+                    color = Gold
+                )
+                Spacer(Modifier.width(10.dp))
+                Text("Searching\u2026", color = Cream.copy(alpha = 0.7f), fontSize = 14.sp)
+            }
+        } else {
+            ui.discovered.forEach { room ->
+                Surface(
+                    color = Felt,
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !ui.joining) { vm.join(room.code, room.host, room.port) }
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                "Room ${room.code}",
+                                color = Cream,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                            Text(room.host, color = Cream.copy(alpha = 0.6f), fontSize = 12.sp)
+                        }
+                        Text("Join \u2192", color = Gold, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+        HorizontalDivider(color = Cream.copy(alpha = 0.15f))
+        Spacer(Modifier.height(20.dp))
+
+        Text("Or join by host IP", color = Gold, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = ip,
+            onValueChange = { ip = it },
+            label = { Text("Host IP (e.g. 192.168.43.1)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = { vm.join(code, ip) },
+            enabled = !ui.joining,
+            modifier = Modifier.fillMaxWidth().height(50.dp)
+        ) {
+            Text("Connect", fontWeight = FontWeight.Bold)
+        }
+
+        if (ui.joinStatus.isNotEmpty()) {
+            Spacer(Modifier.height(14.dp))
+            Text(
+                ui.joinStatus,
+                color = if (ui.joining) Cream else DangerRed,
+                fontSize = 14.sp
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        TextButton(onClick = { vm.closeJoin() }) {
+            Text("Back", color = Cream.copy(alpha = 0.7f))
+        }
+    }
+}
