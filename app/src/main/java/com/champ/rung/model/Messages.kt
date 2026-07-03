@@ -9,6 +9,12 @@ enum class Phase {
 }
 
 @Serializable
+enum class GameMode(val label: String) {
+    SINGLE_SIR("Single Sir"),
+    DOUBLE_SIR("Double Sir")
+}
+
+@Serializable
 data class SeatInfo(
     val name: String = "",
     val connected: Boolean = false
@@ -51,6 +57,9 @@ data class TableState(
     val tricksB: Int = 0,
     val completedTricks: Int = 0,
     val pendingPile: Int = 0,
+    val gameMode: GameMode = GameMode.SINGLE_SIR,
+    val streakSeat: Int = -1,          // Double Sir: who won the previous trick
+    val firstClaimDone: Boolean = false, // Double Sir: has any pile been lifted this round
     val tossCards: List<Card>? = null,
     val tossLowest: Int = -1,
     val banner: String = "",
@@ -73,6 +82,9 @@ sealed class Msg {
 
     @Serializable @SerialName("play")
     data class Play(val card: Card) : Msg()
+
+    @Serializable @SerialName("takeSeat")
+    data class TakeSeat(val seat: Int) : Msg()
 
     // host -> client
     @Serializable @SerialName("welcome")

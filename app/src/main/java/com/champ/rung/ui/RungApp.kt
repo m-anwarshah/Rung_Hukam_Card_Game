@@ -1,6 +1,7 @@
 package com.champ.rung.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.champ.rung.GameViewModel
 import com.champ.rung.Screen
+import com.champ.rung.model.GameMode
 import com.champ.rung.ui.theme.Cream
 import com.champ.rung.ui.theme.DangerRed
 import com.champ.rung.ui.theme.DisplayFont
@@ -70,7 +72,7 @@ fun RungApp(vm: GameViewModel) {
                 Screen.HOME -> HomeScreen(
                     name = ui.myName,
                     onName = vm::setName,
-                    onCreate = vm::createRoom,
+                    onCreate = { mode -> vm.createRoom(mode) },
                     onJoin = vm::openJoin
                 )
                 Screen.JOIN -> JoinScreen(vm)
@@ -84,9 +86,11 @@ fun RungApp(vm: GameViewModel) {
 private fun HomeScreen(
     name: String,
     onName: (String) -> Unit,
-    onCreate: () -> Unit,
+    onCreate: (GameMode) -> Unit,
     onJoin: () -> Unit
 ) {
+    var mode by rememberSaveable { mutableStateOf(GameMode.DOUBLE_SIR) }
+
     Column(
         modifier = Modifier.fillMaxSize().padding(28.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -111,9 +115,29 @@ private fun HomeScreen(
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(18.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            ModeCard(
+                title = "Single Sir",
+                detail = "Every trick scores the moment it's won.",
+                selected = mode == GameMode.SINGLE_SIR,
+                modifier = Modifier.weight(1f)
+            ) { mode = GameMode.SINGLE_SIR }
+            ModeCard(
+                title = "Double Sir",
+                detail = "Tricks pile up \u2014 win 2 in a row to claim them.",
+                selected = mode == GameMode.DOUBLE_SIR,
+                modifier = Modifier.weight(1f)
+            ) { mode = GameMode.DOUBLE_SIR }
+        }
+
+        Spacer(Modifier.height(18.dp))
         Button(
-            onClick = onCreate,
+            onClick = { onCreate(mode) },
             modifier = Modifier.fillMaxWidth().height(54.dp)
         ) {
             Text("Create room", fontSize = 17.sp, fontWeight = FontWeight.Bold)
@@ -134,6 +158,45 @@ private fun HomeScreen(
             fontSize = 13.sp,
             textAlign = TextAlign.Center
         )
+    }
+}
+
+@Composable
+private fun ModeCard(
+    title: String,
+    detail: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        color = if (selected) Felt else FeltDark,
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(
+            width = if (selected) 2.dp else 1.dp,
+            color = if (selected) Gold else Cream.copy(alpha = 0.25f)
+        ),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier
+                .clickable { onClick() }
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+        ) {
+            Text(
+                title,
+                color = if (selected) Gold else Cream,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                detail,
+                color = Cream.copy(alpha = if (selected) 0.85f else 0.55f),
+                fontSize = 11.sp,
+                lineHeight = 14.sp
+            )
+        }
     }
 }
 

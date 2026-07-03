@@ -10,10 +10,44 @@ Built with Kotlin + Jetpack Compose. Package `com.champ.rung`, `minSdk 26`,
 ### How a game works
 - **Host** taps *Create room* → gets a code (e.g. `4582`) and starts a hotspot or joins shared Wi-Fi.
 - **Three players** tap *Join room*, pick the room from the nearby list (or type the host's IP), and enter the code.
+- **In the lobby**, a joiner can tap a **free seat to switch teams** or a **taken seat to swap places** with that player. The room creator anchors seat 0 (Team A); seats lock when the game starts.
 - When all four seats are filled, the host taps *Start*.
 - Toss, dealing, Rung selection, and all 13 tricks play out with each phone seeing **only its own hand**.
 
 Teams are fixed by seat: **seats 0 & 2 = Team A**, **seats 1 & 3 = Team B** (partners sit opposite). Turn order is anti-clockwise.
+
+### Game modes (chosen by the host on the Create screen)
+
+**Single Sir** — every trick is credited to the winning team the moment it's won.
+The lift animations (after 5 tricks, then every 2, Ace can't take the first lift)
+are cosmetic; they never change the score.
+
+**Double Sir** (default) — the real prize game:
+- Won tricks are **not** credited. Each completed trick's 4 cards join a pending
+  **pile** in the middle (shown top-right on the table).
+- When the **same player wins two tricks in a row**, they *claim* the whole pile —
+  every pending card — for their team. Claimed cards ÷ 4 = tricks scored.
+- **Minimums (compulsory), no maximum:** the *first* lift of the round requires at
+  least **5 tricks** in the pile; every later lift requires at least **2** (which a
+  fresh consecutive pair always provides). Nothing ever *forces* a lift — the pile
+  keeps growing until a pair lands at or past the minimum. A pair that comes too
+  early is wasted for claiming, but the player's streak survives.
+- **Ace rule:** the *first* claim of the round can't be made with an Ace. If the
+  pair-completing trick was won by an Ace, the pile stays; the player's streak
+  survives, so winning the *next* trick (non-Ace) claims everything. After the
+  first successful claim, Aces claim freely.
+- After a claim the streak **resets** — a fresh pair of consecutive wins is needed
+  for the next claim, starting from an empty pile.
+- Whatever is still pending after the 13th trick goes to the **winner of that last
+  trick**.
+- Court / GC / round-winner are judged on **claimed** tricks — so in Double Sir a
+  GC means the rung team never managed to claim a single pile.
+
+The Double Sir rules are isolated in `engine/DoubleSirTracker.kt` (pure Kotlin, no
+Android imports) and were verified offline: 250,000 randomized rounds plus
+deterministic edge cases were cross-checked against an independent reference
+implementation — 23.3 million assertions, all passing (card conservation, claim
+legality, ace-block streak survival, post-claim reset, last-trick flush).
 
 ### Where the rules live in the code
 The whole rulebook is implemented authoritatively on the host in

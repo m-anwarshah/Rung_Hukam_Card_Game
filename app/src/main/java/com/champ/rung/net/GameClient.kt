@@ -158,6 +158,7 @@ class GameClient(
 
     fun sendPlay(card: Card) = sendAsync(Msg.Play(card))
     fun sendChooseRung(suit: Suit) = sendAsync(Msg.ChooseRung(suit))
+    fun sendTakeSeat(seat: Int) = sendAsync(Msg.TakeSeat(seat))
 
     private fun closeSocketQuietly() {
         try { socket?.close() } catch (_: Exception) {}

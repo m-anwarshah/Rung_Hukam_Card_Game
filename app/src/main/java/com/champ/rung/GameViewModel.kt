@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.champ.rung.engine.HostGameController
 import com.champ.rung.model.Card
+import com.champ.rung.model.GameMode
 import com.champ.rung.model.Msg
 import com.champ.rung.model.Suit
 import com.champ.rung.model.TableState
@@ -55,7 +56,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun setName(name: String) { _ui.update { it.copy(myName = name) } }
 
     // ---------------- HOST ----------------
-    fun createRoom() {
+    fun createRoom(mode: GameMode) {
         val name = _ui.value.myName.trim().ifEmpty { "Player 1" }
         val code = Random.nextInt(1000, 10000).toString()
         val ips = NetUtils.localIpAddresses()
@@ -65,6 +66,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             roomCode = code,
             hostName = name,
             hostIps = ips,
+            gameMode = mode,
             callbacks = object : HostGameController.Callbacks {
                 override fun onHostState(table: TableState) {
                     _ui.update { it.copy(table = table, mySeat = 0) }
@@ -181,6 +183,11 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun playCard(card: Card) {
         if (_ui.value.isHost) controller?.post(HostGameController.Action.HostPlayed(card))
         else client?.sendPlay(card)
+    }
+
+    /** Lobby team selection — joiners only; the host is anchored on seat 0. */
+    fun takeSeat(seat: Int) {
+        if (!_ui.value.isHost) client?.sendTakeSeat(seat)
     }
 
     // ---------------- leaving ----------------

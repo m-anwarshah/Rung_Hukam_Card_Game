@@ -1,6 +1,7 @@
 package com.champ.rung.engine
 
 import com.champ.rung.model.Card
+import com.champ.rung.model.GameMode
 import com.champ.rung.model.Msg
 import com.champ.rung.model.Phase
 import com.champ.rung.model.PlayedCard
@@ -31,6 +32,7 @@ class HostGameController(
     private val roomCode: String,
     hostName: String,
     private val hostIps: List<String>,
+    private val gameMode: GameMode,
     private val callbacks: Callbacks
 ) {
     interface Callbacks {
@@ -68,6 +70,7 @@ class HostGameController(
     private var firstLiftDone = false
     private var tricksSinceLastLift = 0
     private var pendingPile = 0
+    private val doubleSir = DoubleSirTracker()   // used only in DOUBLE_SIR mode
     private var tossCards: List<Card>? = null
     private var tossLowest = -1
     private var banner = ""
@@ -137,6 +140,7 @@ class HostGameController(
         when (msg) {
             is Msg.ChooseRung -> onChooseRung(conn.seat, msg.suit)
             is Msg.Play -> onPlay(conn.seat, msg.card)
+            is Msg.TakeSeat -> onTakeSeat(conn, msg.seat)
             else -> { /* ignore */ }
         }
     }
@@ -201,6 +205,50 @@ class HostGameController(
             candidate = "$wanted $n"; n++
         }
         return candidate
+    }
+
+    /**
+     * Lobby-only team/seat selection. A joiner taps a seat: if it's free they
+     * move there; if another joiner holds it, the two swap. Seat 0 belongs to
+     * whoever created the room and never moves — Team A is anchored on the host.
+     */
+    private fun onTakeSeat(conn: ClientConn, target: Int) {
+        val from = conn.seat
+        if (from !in 1..3) return
+        if (phase != Phase.LOBBY) {
+            conn.send(Msg.Toast("Seats are locked once the game starts."))
+            return
+        }
+        if (target == from) return
+        if (target !in 1..3) {
+            conn.send(Msg.Toast("The host keeps that seat \u2014 pick another."))
+            return
+        }
+        val teamName = if (target % 2 == 0) "A" else "B"
+        if (names[target].isEmpty()) {
+            names[target] = names[from]
+            connected[target] = connected[from]
+            names[from] = ""
+            connected[from] = false
+            conns.set(target, conn)
+            conns.set(from, null)
+            conn.seat = target
+            toastAll("${names[target]} moved to Team $teamName")
+        } else {
+            val other = conns.get(target)
+            val tmpName = names[target]
+            names[target] = names[from]
+            names[from] = tmpName
+            val tmpConn = connected[target]
+            connected[target] = connected[from]
+            connected[from] = tmpConn
+            conns.set(target, conn)
+            conns.set(from, other)
+            conn.seat = target
+            other?.seat = from
+            toastAll("${names[target]} and ${names[from]} swapped seats")
+        }
+        pushAll()
     }
 
     private fun onGone(conn: ClientConn) {
@@ -350,20 +398,41 @@ class HostGameController(
         pushAll()
         delay(2600)
 
-        tricksWon[teamOf(winnerSeat)]++
         completedTricks++
-        pendingPile += 4
-        applyLifting(winnerSeat, winningCard)
+        var claimNote = ""
+        if (gameMode == GameMode.DOUBLE_SIR) {
+            when (val out = doubleSir.onTrickWon(winnerSeat, winningCard.isAce)) {
+                is DoubleSirTracker.Outcome.Claimed -> {
+                    tricksWon[teamOf(winnerSeat)] += out.cards / 4
+                    claimNote = "${names[winnerSeat]} claims ${out.cards} cards (${out.cards / 4} tricks)"
+                    toastAll(claimNote)
+                }
+                is DoubleSirTracker.Outcome.AceBlocked -> {
+                    claimNote = "Ace can't make the first claim \u2014 pile stays"
+                    toastAll(claimNote)
+                }
+                is DoubleSirTracker.Outcome.TooEarly -> {
+                    claimNote = "First lift needs ${out.needTricks} tricks \u2014 pile has ${out.haveTricks}"
+                    toastAll(claimNote)
+                }
+                is DoubleSirTracker.Outcome.Accumulated -> { /* pile keeps growing */ }
+            }
+        } else {
+            tricksWon[teamOf(winnerSeat)]++
+            pendingPile += 4
+            applyLifting(winnerSeat, winningCard)
+        }
 
         trick.clear()
         trickWinner = -1
 
         if (completedTricks >= 13) {
-            finishRound()
+            finishRound(winnerSeat)
         } else {
             phase = Phase.PLAYING
             turn = winnerSeat
-            banner = "${names[winnerSeat]} leads"
+            banner = if (claimNote.isEmpty()) "${names[winnerSeat]} leads"
+                     else "$claimNote \u00B7 ${names[winnerSeat]} leads"
             pushAll()
         }
     }
@@ -404,8 +473,20 @@ class HostGameController(
         }
     }
 
-    private fun finishRound() {
-        pendingPile = 0 // sweep any leftover
+    private fun finishRound(lastWinnerSeat: Int) {
+        if (gameMode == GameMode.DOUBLE_SIR) {
+            // Whatever is still on the table goes to whoever won the 13th trick.
+            val leftover = doubleSir.flushRemainder()
+            if (leftover > 0) {
+                tricksWon[teamOf(lastWinnerSeat)] += leftover / 4
+                toastAll(
+                    "${names[lastWinnerSeat]} takes the remaining $leftover cards " +
+                        "(${leftover / 4} tricks)"
+                )
+            }
+        } else {
+            pendingPile = 0 // sweep the display-only pile
+        }
         val rungTeam = teamOf(rungSelector)
         val rungTricks = tricksWon[rungTeam]
         val kind: String
@@ -461,6 +542,7 @@ class HostGameController(
         firstLiftDone = false
         tricksSinceLastLift = 0
         pendingPile = 0
+        doubleSir.reset()
         tossCards = null
         tossLowest = -1
         roundResult = null
@@ -486,7 +568,10 @@ class HostGameController(
             tricksA = tricksWon[0],
             tricksB = tricksWon[1],
             completedTricks = completedTricks,
-            pendingPile = pendingPile,
+            pendingPile = if (gameMode == GameMode.DOUBLE_SIR) doubleSir.pendingPile else pendingPile,
+            gameMode = gameMode,
+            streakSeat = if (gameMode == GameMode.DOUBLE_SIR) doubleSir.streakSeat else -1,
+            firstClaimDone = if (gameMode == GameMode.DOUBLE_SIR) doubleSir.firstClaimDone else false,
             tossCards = tossCards,
             tossLowest = tossLowest,
             banner = banner,

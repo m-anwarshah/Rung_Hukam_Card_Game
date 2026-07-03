@@ -41,7 +41,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.champ.rung.GameViewModel
 import com.champ.rung.Ui
+import com.champ.rung.engine.DoubleSirTracker
 import com.champ.rung.model.Card
+import com.champ.rung.model.GameMode
 import com.champ.rung.model.Phase
 import com.champ.rung.model.SeatInfo
 import com.champ.rung.model.Suit
@@ -119,12 +121,55 @@ private fun LobbyScreen(vm: GameViewModel, ui: Ui, table: TableState) {
                 textAlign = TextAlign.Center
             )
         }
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(14.dp))
+        Surface(
+            color = Felt,
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(1.dp, Gold)
+        ) {
+            Text(
+                table.gameMode.label.uppercase(),
+                color = Gold,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 2.sp,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp)
+            )
+        }
+        if (table.gameMode == GameMode.DOUBLE_SIR) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Tricks pile up in the middle. Win two tricks in a row to claim the pile \u2014 " +
+                    "the first lift needs at least 5 tricks piled and can't be made with an Ace.",
+                color = Cream.copy(alpha = 0.6f),
+                fontSize = 11.sp,
+                textAlign = TextAlign.Center
+            )
+        }
+        Spacer(Modifier.height(20.dp))
 
         (0 until 4).forEach { seat ->
             val info = table.seats.getOrNull(seat) ?: SeatInfo()
-            SeatRow(seat, info, isMe = seat == table.mySeat, isHostSeat = seat == 0)
+            val canTap = !ui.isHost && seat != 0 && seat != table.mySeat
+            SeatRow(
+                seat = seat,
+                info = info,
+                isMe = seat == table.mySeat,
+                isHostSeat = seat == 0,
+                onTap = if (canTap) ({ vm.takeSeat(seat) }) else null
+            )
         }
+
+        Spacer(Modifier.height(8.dp))
+        Text(
+            if (ui.isHost)
+                "You anchor Team A. Players can tap a seat to pick their team or swap places."
+            else
+                "Tap a free seat to switch teams \u2014 tap a taken seat to swap places.",
+            color = Cream.copy(alpha = 0.55f),
+            fontSize = 11.sp,
+            textAlign = TextAlign.Center
+        )
 
         Spacer(Modifier.weight(1f))
 
@@ -150,7 +195,13 @@ private fun LobbyScreen(vm: GameViewModel, ui: Ui, table: TableState) {
 }
 
 @Composable
-private fun SeatRow(seat: Int, info: SeatInfo, isMe: Boolean, isHostSeat: Boolean) {
+private fun SeatRow(
+    seat: Int,
+    info: SeatInfo,
+    isMe: Boolean,
+    isHostSeat: Boolean,
+    onTap: (() -> Unit)? = null
+) {
     val team = if (seat % 2 == 0) "A" else "B"
     val teamColor = if (seat % 2 == 0) Gold else Cream
     Row(
@@ -159,6 +210,7 @@ private fun SeatRow(seat: Int, info: SeatInfo, isMe: Boolean, isHostSeat: Boolea
             .padding(vertical = 5.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(Felt)
+            .then(if (onTap != null) Modifier.clickable { onTap() } else Modifier)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -178,6 +230,14 @@ private fun SeatRow(seat: Int, info: SeatInfo, isMe: Boolean, isHostSeat: Boolea
         }
         if (isHostSeat) Text("host", color = Gold, fontSize = 12.sp)
         if (isMe) Text("  (you)", color = GoldBright, fontSize = 12.sp)
+        if (onTap != null) {
+            Text(
+                if (info.name.isEmpty()) "sit here \u21C4" else "swap \u21C4",
+                color = Gold.copy(alpha = 0.8f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 
@@ -253,14 +313,22 @@ private fun TableScreen(vm: GameViewModel, ui: Ui, table: TableState) {
                 TrickArea(table)
             }
 
-            if (table.pendingPile > 0) {
-                Row(
+            if (table.gameMode == GameMode.DOUBLE_SIR || table.pendingPile > 0) {
+                Column(
                     modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    CardBack(width = 22.dp)
-                    Spacer(Modifier.width(4.dp))
-                    Text("${table.pendingPile}", color = Cream, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CardBack(width = 22.dp)
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            "${table.pendingPile}",
+                            color = if (table.pendingPile > 0) GoldBright else Cream.copy(alpha = 0.5f),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Text("pile", color = Cream.copy(alpha = 0.55f), fontSize = 10.sp)
                 }
             }
         }
@@ -311,6 +379,15 @@ private fun ScoreBar(table: TableState) {
                 color = Cream.copy(alpha = 0.7f),
                 fontSize = 11.sp
             )
+            if (table.gameMode == GameMode.DOUBLE_SIR) {
+                Text(
+                    "DOUBLE SIR",
+                    color = Gold.copy(alpha = 0.8f),
+                    fontSize = 9.sp,
+                    letterSpacing = 1.5.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
         TeamScore(
             "B", table.tricksB, table.roundsB, mine = !myTeamA,
@@ -395,6 +472,11 @@ private fun OpponentTile(table: TableState, seat: Int) {
         if (!info.connected && info.name.isNotEmpty()) {
             Text("offline", color = DangerRed, fontSize = 10.sp)
         }
+        if (table.gameMode == GameMode.DOUBLE_SIR && table.streakSeat == seat &&
+            (table.phase == Phase.PLAYING || table.phase == Phase.TRICK_DONE)
+        ) {
+            Text("\u25C6 won last trick", color = GoldBright, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }
 
@@ -467,6 +549,26 @@ private fun StatusStrip(table: TableState) {
             )
         }
     }
+    if (table.gameMode == GameMode.DOUBLE_SIR && table.phase == Phase.PLAYING &&
+        table.streakSeat == table.mySeat
+    ) {
+        val tricksAfter = (table.pendingPile + 4) / 4
+        val wouldClaim = table.firstClaimDone ||
+            tricksAfter >= DoubleSirTracker.FIRST_CLAIM_MIN_TRICKS
+        Text(
+            if (wouldClaim)
+                "You won the last trick \u2014 win this one to claim the pile (${table.pendingPile + 4} cards)"
+            else
+                "You won the last trick \u2014 first lift needs " +
+                    "${DoubleSirTracker.FIRST_CLAIM_MIN_TRICKS} tricks in the pile " +
+                    "($tricksAfter after this one)",
+            color = GoldBright,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)
+        )
+    }
 }
 
 @Composable
@@ -535,7 +637,10 @@ private fun RoundOverOverlay(vm: GameViewModel, ui: Ui, table: TableState) {
                             fontFamily = FontFamily.Serif, letterSpacing = 4.sp
                         )
                         Text(
-                            "Rung team took zero \u2014 Team ${r.winnerTeam} wins",
+                            if (table.gameMode == GameMode.DOUBLE_SIR)
+                                "Rung team claimed nothing \u2014 Team ${r.winnerTeam} wins"
+                            else
+                                "Rung team took zero \u2014 Team ${r.winnerTeam} wins",
                             color = Cream, fontSize = 14.sp, textAlign = TextAlign.Center
                         )
                     }
