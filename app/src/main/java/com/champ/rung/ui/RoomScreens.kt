@@ -148,24 +148,31 @@ private fun LobbyScreen(vm: GameViewModel, ui: Ui, table: TableState) {
         }
         Spacer(Modifier.height(20.dp))
 
-        (0 until 4).forEach { seat ->
-            val info = table.seats.getOrNull(seat) ?: SeatInfo()
-            val canTap = !ui.isHost && seat != 0 && seat != table.mySeat
-            SeatRow(
-                seat = seat,
-                info = info,
-                isMe = seat == table.mySeat,
-                isHostSeat = seat == 0,
-                onTap = if (canTap) ({ vm.takeSeat(seat) }) else null
-            )
-        }
+        // Pick your team: two labelled groups so joiners clearly choose who to partner.
+        TeamGroup(
+            teamName = "A",
+            accent = Gold,
+            seats = listOf(0, 2),
+            table = table,
+            isHost = ui.isHost,
+            onTake = { seat -> vm.takeSeat(seat) }
+        )
+        Spacer(Modifier.height(12.dp))
+        TeamGroup(
+            teamName = "B",
+            accent = Color(0xFF74A9C7),
+            seats = listOf(1, 3),
+            table = table,
+            isHost = ui.isHost,
+            onTake = { seat -> vm.takeSeat(seat) }
+        )
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         Text(
             if (ui.isHost)
-                "You anchor Team A. Players can tap a seat to pick their team or swap places."
+                "You're the host, anchoring Team A. The others choose a team above \u2014 start once all four seats are filled."
             else
-                "Tap a free seat to switch teams \u2014 tap a taken seat to swap places.",
+                "Choose your team: tap an empty seat to join it, or a taken seat to swap. You and your partner share a team.",
             color = Cream.copy(alpha = 0.55f),
             fontSize = 11.sp,
             textAlign = TextAlign.Center
@@ -195,6 +202,50 @@ private fun LobbyScreen(vm: GameViewModel, ui: Ui, table: TableState) {
 }
 
 @Composable
+private fun TeamGroup(
+    teamName: String,
+    accent: Color,
+    seats: List<Int>,
+    table: TableState,
+    isHost: Boolean,
+    onTake: (Int) -> Unit
+) {
+    val filled = seats.count { (table.seats.getOrNull(it)?.name ?: "").isNotEmpty() }
+    Surface(
+        color = Felt.copy(alpha = 0.4f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.45f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "TEAM $teamName",
+                    color = accent,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    letterSpacing = 2.sp
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("partners \u00B7 $filled/2", color = Cream.copy(alpha = 0.45f), fontSize = 11.sp)
+            }
+            Spacer(Modifier.height(8.dp))
+            seats.forEach { seat ->
+                val info = table.seats.getOrNull(seat) ?: SeatInfo()
+                val canTap = !isHost && seat != 0 && seat != table.mySeat
+                SeatRow(
+                    seat = seat,
+                    info = info,
+                    isMe = seat == table.mySeat,
+                    isHostSeat = seat == 0,
+                    onTap = if (canTap) ({ onTake(seat) }) else null
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun SeatRow(
     seat: Int,
     info: SeatInfo,
@@ -202,39 +253,46 @@ private fun SeatRow(
     isHostSeat: Boolean,
     onTap: (() -> Unit)? = null
 ) {
-    val team = if (seat % 2 == 0) "A" else "B"
-    val teamColor = if (seat % 2 == 0) Gold else Cream
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 5.dp)
+            .padding(vertical = 4.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(Felt)
+            .background(if (isMe) FeltLight else Felt)
             .then(if (onTap != null) Modifier.clickable { onTap() } else Modifier)
-            .padding(14.dp),
+            .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier = Modifier.size(10.dp).clip(CircleShape)
-                .background(if (info.connected) Color(0xFF4CAF50) else DangerRed)
+            modifier = Modifier.size(10.dp).clip(CircleShape).background(
+                when {
+                    info.name.isEmpty() -> Cream.copy(alpha = 0.25f)
+                    info.connected -> Color(0xFF4CAF50)
+                    else -> DangerRed
+                }
+            )
         )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(
-                if (info.name.isEmpty()) "Waiting\u2026" else info.name,
+                if (info.name.isEmpty()) "Empty seat" else info.name,
                 color = if (info.name.isEmpty()) Cream.copy(alpha = 0.4f) else Cream,
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp
             )
-            Text("Team $team", color = teamColor.copy(alpha = 0.8f), fontSize = 12.sp)
+            val tags = buildList {
+                if (isHostSeat) add("host")
+                if (isMe) add("you")
+            }
+            if (tags.isNotEmpty()) {
+                Text(tags.joinToString(" \u00B7 "), color = GoldBright, fontSize = 11.sp)
+            }
         }
-        if (isHostSeat) Text("host", color = Gold, fontSize = 12.sp)
-        if (isMe) Text("  (you)", color = GoldBright, fontSize = 12.sp)
         if (onTap != null) {
             Text(
                 if (info.name.isEmpty()) "sit here \u21C4" else "swap \u21C4",
-                color = Gold.copy(alpha = 0.8f),
-                fontSize = 11.sp,
+                color = Gold,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
             )
         }

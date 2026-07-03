@@ -90,23 +90,24 @@ private fun HomeScreen(
     onJoin: () -> Unit
 ) {
     var mode by rememberSaveable { mutableStateOf(GameMode.DOUBLE_SIR) }
+    val scroll = rememberScrollState()
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(28.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 28.dp).verticalScroll(scroll),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(Modifier.height(48.dp))
-        Text("\u2660", fontSize = 64.sp, color = Gold)
+        Spacer(Modifier.height(40.dp))
+        Text("\u2660", fontSize = 60.sp, color = Gold)
         Text(
             "RUNG",
-            fontSize = 52.sp,
+            fontSize = 50.sp,
             fontWeight = FontWeight.Bold,
             color = Cream,
             letterSpacing = 8.sp,
             fontFamily = DisplayFont
         )
         Text("Court Piece \u00B7 Hukam", color = Gold, fontSize = 15.sp, letterSpacing = 2.sp)
-        Spacer(Modifier.height(40.dp))
+        Spacer(Modifier.height(30.dp))
 
         OutlinedTextField(
             value = name,
@@ -115,49 +116,85 @@ private fun HomeScreen(
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(22.dp))
 
+        // Host a game: the game type is chosen HERE, by the host only.
+        Surface(
+            color = Felt.copy(alpha = 0.45f),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, Gold.copy(alpha = 0.45f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text(
+                    "HOST A GAME",
+                    color = Gold,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Choose the game type, then create the room. Only the host picks this \u2014 everyone else just joins.",
+                    color = Cream.copy(alpha = 0.6f),
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    ModeCard(
+                        title = "Single Sir",
+                        detail = "Every trick scores the moment it's won.",
+                        selected = mode == GameMode.SINGLE_SIR,
+                        modifier = Modifier.weight(1f)
+                    ) { mode = GameMode.SINGLE_SIR }
+                    ModeCard(
+                        title = "Double Sir",
+                        detail = "Tricks pile up \u2014 win 2 in a row to claim them.",
+                        selected = mode == GameMode.DOUBLE_SIR,
+                        modifier = Modifier.weight(1f)
+                    ) { mode = GameMode.DOUBLE_SIR }
+                }
+                Spacer(Modifier.height(14.dp))
+                Button(
+                    onClick = { onCreate(mode) },
+                    modifier = Modifier.fillMaxWidth().height(52.dp)
+                ) {
+                    Text("Create room", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(18.dp))
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            ModeCard(
-                title = "Single Sir",
-                detail = "Every trick scores the moment it's won.",
-                selected = mode == GameMode.SINGLE_SIR,
-                modifier = Modifier.weight(1f)
-            ) { mode = GameMode.SINGLE_SIR }
-            ModeCard(
-                title = "Double Sir",
-                detail = "Tricks pile up \u2014 win 2 in a row to claim them.",
-                selected = mode == GameMode.DOUBLE_SIR,
-                modifier = Modifier.weight(1f)
-            ) { mode = GameMode.DOUBLE_SIR }
+            HorizontalDivider(modifier = Modifier.weight(1f), color = Cream.copy(alpha = 0.15f))
+            Text("  or  ", color = Cream.copy(alpha = 0.5f), fontSize = 13.sp)
+            HorizontalDivider(modifier = Modifier.weight(1f), color = Cream.copy(alpha = 0.15f))
         }
-
         Spacer(Modifier.height(18.dp))
-        Button(
-            onClick = { onCreate(mode) },
-            modifier = Modifier.fillMaxWidth().height(54.dp)
-        ) {
-            Text("Create room", fontSize = 17.sp, fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.height(12.dp))
+
+        // Join a game: no mode choice here; team is chosen in the lobby.
         OutlinedButton(
             onClick = onJoin,
-            modifier = Modifier.fillMaxWidth().height(54.dp)
+            modifier = Modifier.fillMaxWidth().height(52.dp)
         ) {
-            Text("Join room", fontSize = 17.sp)
+            Text("Join a game", fontSize = 16.sp)
         }
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(6.dp))
         Text(
-            "One phone creates the room and hosts. Three others join over the same " +
-                "Wi-Fi or hotspot using the 4-digit code. Four players, two teams, " +
-                "played anti-clockwise.",
-            color = Cream.copy(alpha = 0.6f),
-            fontSize = 13.sp,
+            "Enter a room's code, then pick your team in the lobby.",
+            color = Cream.copy(alpha = 0.5f),
+            fontSize = 12.sp,
             textAlign = TextAlign.Center
         )
+
+        Spacer(Modifier.height(24.dp))
     }
 }
 
